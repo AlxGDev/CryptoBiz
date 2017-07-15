@@ -9,3 +9,6 @@ Vert.x
 AngularJS
 
 Postgres
+
+# Live demo
+cryptobiz.party
