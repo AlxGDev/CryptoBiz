@@ -1,0 +1,55 @@
+
+
+<div class = "container">
+	<div class="page-header" id="banner">
+	  <h1><center>Current /biz/ Top 10</center></h1>
+	</div>
+	<div class = "jumbotron">
+	
+		<div class="alert alert-danger" ng-hide = "vm.error.hidden">
+		  <strong>Error!</strong> {{vm.error.message}}
+		</div>
+		<ul class="list-group">
+	    <li class="list-group-item" >
+	    	<div class="row">
+		      <div class="col-md-2 col-md-offset-1">
+		        <b><h3>Rank</h3><b>
+		      </div>
+		      <div class="col-md-2">
+		        <b><h3>Name</h3><b>
+		      </div>
+		      <div class="col-md-2">
+		       <b><h3>Symbol</h3><b>
+		      </div>
+		      <div class="col-md-2">
+		        <b><h3>Threads</h3><b>
+		      </div>
+		      <div class="col-md-2">
+		        <b><h3>Posts</h3><b>
+		      </div>
+			 </div>
+		</li>
+		 <li class="list-group-item" ng-repeat="stat in vm.coinstats" >
+	    	<a ui-sref="detail({coin: stat.coin})" class ="deco-none">
+	    	<div class="row">
+		      <div class="col-md-2 col-md-offset-1">
+		        {{$index +1}}
+		      </div>
+		      <div class="col-md-2">
+		        {{stat.coin.name}}
+		      </div>
+		      <div class="col-md-2">
+		        {{stat.coin.symbol}}
+		      </div>
+		      <div class="col-md-2">
+		        {{stat.nrThreads}}
+		      </div>
+		      <div class="col-md-2">
+		        {{stat.nrPosts}}
+		      </div>
+			 </div>
+			 </a>
+		</li>
+	  </ul>
+	</div>
+</div>
