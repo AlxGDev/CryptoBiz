@@ -11,11 +11,10 @@ spring:
     datasource: 
         url: jdbc:postgresql://localhost:5432/bizwatch
         username: postgres
-        password: root
+        password: bizwatchdb###
         testWhileIdle: true
         validationQuery: SELECT 1
         
 app:
     name: CryptoBiz
     url: http://localhost:8080
-    

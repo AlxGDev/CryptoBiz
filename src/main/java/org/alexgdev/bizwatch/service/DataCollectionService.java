@@ -43,7 +43,7 @@ public class DataCollectionService {
 	private BizStatsEntryRepository bizrepo;
 	
 	
-	List<String> commonWords = Arrays.asList(" time ", " moon ");
+	List<String> commonWords = Arrays.asList(" time ", " moon ", " pay ", " game ");
 	
 	
 	public void collectBizCoinData(){
