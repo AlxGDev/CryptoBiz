@@ -19,7 +19,7 @@
 				hidden: true,
 				message: ""
 		};
-		vm.currentcoin = {};
+		vm.currentcoin = null;
 		vm.currentstats = {};
 		vm.from = {};
 		vm.to = {};
@@ -59,52 +59,67 @@
 		init();
 		
 		function init(){
-			loadCoinInfo($stateParams.coin)
+			var coin;
+			if($stateParams.coin === null || angular.equals({}, $stateParams.coin)){
+				coin = JSON.parse(localStorage.getItem('__detailCoin'));
+				
+			} else {
+				coin = $stateParams.coin;
+				localStorage.setItem('__detailCoin',JSON.stringify($stateParams.coin));
+			}
+			console.log(coin);
+			loadCoinInfo(coin);
 		}
 		
 		function loadCoinInfo(coin) {
-			vm.currentcoin = coin;
-			vm.currentstats = null;
+			if(coin != null){
+				vm.currentcoin = coin;
+				vm.currentstats = null;
+				
+				vm.to = new Date();
+				vm.to.setDate(vm.to.getDate()+1);
+				var to = $filter('date')(vm.to, "yyyy-MM-dd");
+				vm.from = new Date();
+				vm.from.setDate(vm.from.getDate()-7);
+				var from = $filter('date')(vm.from, "yyyy-MM-dd");
+				
+				CoinService.getAllCoinStats(null, null,[{name: "sort", value: 'id,asc'}, {name: "coinId", value: vm.currentcoin.id}, {name: "from", value: from}, {name: "to", value: to}], function (result) {
+	            	if(result.success == true){
+	            		vm.coinstats = result.message.content;
+	            		vm.currentstats = vm.coinstats[vm.coinstats.length-1];
+	            		vm.error.hidden = true;
+	            		drawChart();
+	            		
+	            	} else {
+	            		showAlert(result.message);
+	            	}
+	                
+	            });
+			}
 			
-			vm.to = new Date();
-			vm.to.setDate(vm.to.getDate()+1);
-			var to = $filter('date')(vm.to, "yyyy-MM-dd");
-			vm.from = new Date();
-			vm.from.setDate(vm.from.getDate()-7);
-			var from = $filter('date')(vm.from, "yyyy-MM-dd");
-			
-			CoinService.getAllCoinStats(null, null,[{name: "sort", value: 'id,asc'}, {name: "coinId", value: vm.currentcoin.id}, {name: "from", value: from}, {name: "to", value: to}], function (result) {
-            	if(result.success == true){
-            		vm.coinstats = result.message.content;
-            		vm.currentstats = vm.coinstats[vm.coinstats.length-1];
-            		vm.error.hidden = true;
-            		drawChart();
-            		
-            	} else {
-            		showAlert(result.message);
-            	}
-                
-            });
 	
 
 		}
 		
 		function reloadCoinInfo(){
-			var to = $filter('date')(vm.to, "yyyy-MM-dd");
-			var from = $filter('date')(vm.from, "yyyy-MM-dd");
+			if(vm.currentcoin != null){
+				var to = $filter('date')(vm.to, "yyyy-MM-dd");
+				var from = $filter('date')(vm.from, "yyyy-MM-dd");
 			
-			CoinService.getAllCoinStats(null, null,[{name: "sort", value: 'id,asc'}, {name: "coinId", value: vm.currentcoin.id}, {name: "from", value: from}, {name: "to", value: to}], function (result) {
-            	if(result.success == true){
-            		vm.coinstats = result.message.content;
-            		vm.currentstats = vm.coinstats[vm.coinstats.length-1];
-            		vm.error.hidden = true;
-            		drawChart();
-            		
-            	} else {
-            		showAlert(result.message);
-            	}
-                
-            });
+				CoinService.getAllCoinStats(null, null,[{name: "sort", value: 'id,asc'}, {name: "coinId", value: vm.currentcoin.id}, {name: "from", value: from}, {name: "to", value: to}], function (result) {
+	            	if(result.success == true){
+	            		vm.coinstats = result.message.content;
+	            		vm.currentstats = vm.coinstats[vm.coinstats.length-1];
+	            		vm.error.hidden = true;
+	            		drawChart();
+	            		
+	            	} else {
+	            		showAlert(result.message);
+	            	}
+	                
+	            });
+			}
+			
 			
 		}
 		
