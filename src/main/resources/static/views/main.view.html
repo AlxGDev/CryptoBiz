@@ -36,10 +36,10 @@
 		        {{$index +1}}
 		      </div>
 		      <div class="col-md-2">
-		        {{stat.coin.name}}
+		        {{stat.coin.name.charAt(0).toUpperCase() + stat.coin.name.slice(1)}}
 		      </div>
 		      <div class="col-md-2">
-		        {{stat.coin.symbol}}
+		        {{stat.coin.symbol.toUpperCase()}}
 		      </div>
 		      <div class="col-md-2">
 		        {{stat.nrThreads}}

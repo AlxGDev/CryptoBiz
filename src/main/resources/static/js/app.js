@@ -38,7 +38,7 @@
     function run($rootScope, $state, $http, CoinService) {
     	CoinService.getAllCoins(null, null,[{name: "sort", value: 'id'}], function (result) {
         	if(result.success == true){
-        		$rootScope.coins = result.message.content;
+        		$rootScope.coins = result.message.data;
         		
         	}
         });

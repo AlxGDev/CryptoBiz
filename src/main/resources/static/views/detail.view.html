@@ -2,7 +2,7 @@
 
 <div class = "container">
 <div class="page-header" id="banner">
-  <h1>{{vm.currentcoin.name}} ({{vm.currentcoin.symbol}})</h1>
+  <h1>{{vm.currentcoin.name.charAt(0).toUpperCase() + vm.currentcoin.name.slice(1)}} ({{vm.currentcoin.symbol.toUpperCase()}})</h1>
 </div>
 <div class = "jumbotron">
 

@@ -1,5 +1,7 @@
 package org.alexgdev.bizwatch.dto;
 
+
+
 public class MessageDTO {
 	private String message;
 	private MessageType type;

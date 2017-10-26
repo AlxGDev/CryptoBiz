@@ -35,7 +35,7 @@
 
 			CoinService.getTop10Stats(function (result) {
             	if(result.success == true){
-            		vm.coinstats = result.message;
+            		vm.coinstats = result.message.data;
             		vm.error.hidden = true;
 
             		

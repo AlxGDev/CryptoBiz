@@ -85,7 +85,8 @@
 				
 				CoinService.getAllCoinStats(null, null,[{name: "sort", value: 'id,asc'}, {name: "coinId", value: vm.currentcoin.id}, {name: "from", value: from}, {name: "to", value: to}], function (result) {
 	            	if(result.success == true){
-	            		vm.coinstats = result.message.content;
+	            		console.log(result.message);
+	            		vm.coinstats = result.message.data;
 	            		vm.currentstats = vm.coinstats[vm.coinstats.length-1];
 	            		vm.error.hidden = true;
 	            		drawChart();
