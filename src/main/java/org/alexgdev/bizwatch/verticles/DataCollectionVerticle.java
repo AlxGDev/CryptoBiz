@@ -49,8 +49,10 @@ import io.vertx.ext.web.RoutingContext;
 public class DataCollectionVerticle extends AbstractVerticle{
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(DataCollectionVerticle.class);
+	private static final int RETRIES = 3;
+	private static final int THREADRETRIES = 3;
 	private ScraperService scraper;
-	List<String> commonWords = Arrays.asList(" time ", " moon ", " pay ", " game ");
+	List<String> commonWords = Arrays.asList(" time ", " moon ", " pay ", " game ", " part ");
 	
 	@Autowired
 	private OpenNLPService nlpService;
@@ -66,6 +68,8 @@ public class DataCollectionVerticle extends AbstractVerticle{
 	private Instant processingStart;
 	private Long scheduleTimer;
 	private int lastHourProcessed = 0;
+	//how often 
+	private int getDataRetries = 3;
     
 	@Override
     public void start() throws Exception {
@@ -85,7 +89,8 @@ public class DataCollectionVerticle extends AbstractVerticle{
 	    
 	    //collect data hourly
 	    scheduleTimer = vertx.setPeriodic(10000, i -> {
-	    	if(LocalDateTime.now().getHourOfDay() != lastHourProcessed){
+	    	LocalDateTime t = LocalDateTime.now();
+	    	if(t.getHourOfDay() != lastHourProcessed){ //
 	    		
 	    		lastHourProcessed = LocalDateTime.now().getHourOfDay();
 	    		LOGGER.info("Processing Hour: "+lastHourProcessed);
@@ -116,6 +121,7 @@ public class DataCollectionVerticle extends AbstractVerticle{
           } else {
 
         	  LOGGER.error(res.cause());
+        	  //res.cause().printStackTrace();
         	  consumer.accept(null);
             
           }
@@ -125,13 +131,22 @@ public class DataCollectionVerticle extends AbstractVerticle{
     private void collectBizData(){
 		LOGGER.info("Starting to get Data");
 		
-		scraper.getBizThreads().setHandler(resultHandler( pageEntries -> {
-	 	      if (pageEntries == null) {
-	  	    	 LOGGER.error("Could not retrieve page entries");
-	  	      } else {
-	  	    	  LOGGER.info("Retrieved Page Entries: "+pageEntries.size());
+		scraper.getBizThreads().setHandler(resultHandlerPassThrough( pageEntries -> {
+			if (pageEntries == null && getDataRetries > 0) {
+	  	    	 LOGGER.error("Could not retrieve catalog, retrying");
+	  	    	getDataRetries--;
+		  	    long timer =   vertx.setTimer(2000, id -> {
+		  	    	collectBizData();
+		  	     });
+	  	      } else if (pageEntries == null) {
+		  	    	LOGGER.error("Could not retrieve catalog, stopping");
+		  	    	getDataRetries = RETRIES; 	    
+			  } else {
+	  	    	  //LOGGER.info("Retrieved Page Entries: "+pageEntries.size());
+				 getDataRetries = RETRIES;
 	  	    	 List<PostDTO> posts = new ArrayList<PostDTO>();
 	  	    	 for(PageEntryDTO e : pageEntries){
+	  	    		 e.setRetries(THREADRETRIES);
 	  	    		 threadsToProcess.add(e);
 	  	    		 
 	  	    	 }
@@ -146,17 +161,24 @@ public class DataCollectionVerticle extends AbstractVerticle{
     private void processThread(List<PostDTO> posts, List<PageEntryDTO> pageEntries){
     	if(threadsToProcess.isEmpty()){
     		processedCount = 0;
+    		processingStart = Instant.now();
     		LOGGER.info("Processing finished: "+ posts.size());
     		processData_Step1(pageEntries, posts);
     		
     	} else {
     		PageEntryDTO t = threadsToProcess.poll();
     		scraper.getBizThread(t.getNo()).setHandler(resultHandlerPassThrough( thread -> {
-    			  processedCount++;
-	    		  if (thread == null) {
-		  	    	 LOGGER.error("Could not retrieve thread");
-		  	      } else {
-		  	    	LOGGER.info("Retrieved Posts: "+processedCount);
+    			  
+	    		  if (thread == null && t.getRetries()>0) {
+		  	    	 LOGGER.error("Could not retrieve thread, retrying");
+		  	    	 t.setRetries(t.getRetries()-1);
+		  	    	 threadsToProcess.add(t);
+		  	      } else if (thread == null) {
+		  	    	processedCount++;
+			  	    	 LOGGER.error("Could not retrieve thread");
+			  	  } else {
+			  		processedCount++;
+		  	    	//LOGGER.info("Retrieved Posts: "+processedCount);
 		  	    	 for(PostDTO post : thread.getPosts()){
 		  	    		  posts.add(post);	  	    		  
 		  	    	 }
@@ -171,32 +193,40 @@ public class DataCollectionVerticle extends AbstractVerticle{
     }
 		
 	
-    
+    //get coinmarketcap data and insert new coins into db, then process coin + threads + posts
     private void processData_Step1(List<PageEntryDTO> threads, List<PostDTO> posts){
-    	processingStart = Instant.now();
-    	scraper.getCoinData(200).setHandler(resultHandler( coins -> {
-	 	      if (coins == null) {
-	  	    	 LOGGER.error("Could not retrieve coin data");
-	  	      } else {
+    	
+    	scraper.getCoinData(200).setHandler(resultHandlerPassThrough( coins -> {
+	 	      if (coins == null && getDataRetries > 0) {
+	  	    	 LOGGER.error("Could not retrieve coin data, retrying");
+	  	    	 getDataRetries--;
+		  	    long timer =   vertx.setTimer(2000, id -> {
+		  	    	processData_Step1(threads, posts);
+		  	     });
+	  	      } else if (coins == null) {
+		  	    	LOGGER.error("Could not retrieve coin data!");
+		  	    	 getDataRetries = RETRIES; 	    
+			  } else {
+				  getDataRetries = RETRIES;
 	  	    	  for(CoinMarketCapDTO coinDTO : coins){
 	  	    		  coinService.getCertain(coinDTO.getId()).setHandler(resultHandler( optionalCoin -> {
-	  	  	 	      if (!optionalCoin.isPresent()) {
-	  	  	 	    	CryptoCoin coin = new CryptoCoin(coinDTO);
-	  	  	 	    	coinService.insert(coin).setHandler(resultHandler( success -> {
-	  	  	  	 	      if (success) {
-	  	  		  	    	 LOGGER.info("Created coin: "+coin.getId());
-	  	  		  	    	 processData_Step2(threads, posts, coin, coinDTO);
-	  	  		  	    	 
-	  	  		  	      } else {
-	  	  		  	    	  LOGGER.info("Could not create coin");
-	  	  		  	    	
-	  	  		  	      }
-	  	  		        }));
-	  		  	    	 
-	  		  	      } else {
-	  		  	    	processData_Step2(threads, posts, optionalCoin.get(), coinDTO);
-	  		  	    	 
-	  		  	      }
+		  	  	 	      if (!optionalCoin.isPresent()) {
+		  	  	 	    	CryptoCoin coin = new CryptoCoin(coinDTO);
+		  	  	 	    	coinService.insert(coin).setHandler(resultHandler( success -> {
+		  	  	  	 	      if (success) {
+		  	  		  	    	 LOGGER.info("Created coin: "+coin.getId());
+		  	  		  	    	 processData_Step2(threads, posts, coin, coinDTO);
+		  	  		  	    	 
+		  	  		  	      } else {
+		  	  		  	    	  LOGGER.info("Could not create coin");
+		  	  		  	    	
+		  	  		  	      }
+		  	  		        }));
+		  		  	    	 
+		  		  	      } else {
+		  		  	    	processData_Step2(threads, posts, optionalCoin.get(), coinDTO);
+		  		  	    	 
+		  		  	      }
 	  	    		  }));
 	  	    	  }
 

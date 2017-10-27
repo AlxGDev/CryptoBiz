@@ -56,8 +56,6 @@ public class BizCryptoWatchApplication implements CommandLineRunner{
 			JsonObject config = new JsonObject().put("password", "").put("url", "jdbc:postgresql://localhost:5432/bizwatchdb").put("user", "postgres");
 			options.setConfig(config);
 	        vertx.deployVerticle(serverVerticle, options);
-	        vertx.deployVerticle(coinVerticle, options);
-		
-		
+	        vertx.deployVerticle(coinVerticle, options);		
 	}
 }

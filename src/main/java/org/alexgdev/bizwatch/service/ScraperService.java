@@ -41,8 +41,7 @@ public class ScraperService {
 	}
 	
 	public Future<List<PageDTO>> getBizCatalog(){
-		HttpRequest<Buffer> request =restclient
-		.get(80, "a.4cdn.org", "/biz/catalog.json");
+		HttpRequest<Buffer> request =restclient.getAbs("https://a.4cdn.org/biz/catalog.json");
 		Future<List<PageDTO>> result = Future.future();
 		request.send(ar -> {
 					  if (ar.succeeded()) {
@@ -91,11 +90,11 @@ public class ScraperService {
 	
 	public Future<List<CoinMarketCapDTO>> getCoinData(int limit){
 		
-		String endpoint = "/v1/ticker/";
+		String endpoint = "https://api.coinmarketcap.com/v1/ticker/";
 		if(limit > 0){
 			endpoint+="?limit="+limit;
 		}
-		HttpRequest<Buffer> request =restclient.get(80, "api.coinmarketcap.com", endpoint);
+		HttpRequest<Buffer> request =restclient.getAbs(endpoint);
 		Future<List<CoinMarketCapDTO>> result = Future.future();
 		request.send(ar -> {
 			if (ar.succeeded()) {
@@ -119,7 +118,7 @@ public class ScraperService {
 	}
 	
 	public Future<ThreadDTO> getBizThread(Long no){
-		HttpRequest<Buffer> request =restclient.get(80, "a.4cdn.org", "/biz/thread/"+no+".json");
+		HttpRequest<Buffer> request = restclient.getAbs("https://a.4cdn.org/biz/thread/"+no+".json");
 		Future<ThreadDTO> result = Future.future();
 		request.send(ar -> {
 			if (ar.succeeded()) {

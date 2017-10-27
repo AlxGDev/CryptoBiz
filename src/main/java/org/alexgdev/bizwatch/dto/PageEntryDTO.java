@@ -11,6 +11,7 @@ public class PageEntryDTO {
 	private Integer sticky;
 	private String sub = "";
 	private String com = "";
+	private int retries = 3;
 	
 
 }
