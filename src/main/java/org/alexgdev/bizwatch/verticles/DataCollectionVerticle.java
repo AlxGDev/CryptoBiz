@@ -5,29 +5,26 @@ package org.alexgdev.bizwatch.verticles;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+
 import java.util.Queue;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
+
 
 import org.alexgdev.bizwatch.dto.CoinMarketCapDTO;
 import org.alexgdev.bizwatch.dto.PageEntryDTO;
 import org.alexgdev.bizwatch.dto.PostDTO;
-import org.alexgdev.bizwatch.dto.PostStatsDTO;
-import org.alexgdev.bizwatch.dto.ThreadDTO;
+
 import org.alexgdev.bizwatch.entities.BizStatsEntry;
 import org.alexgdev.bizwatch.entities.CryptoCoin;
+import org.alexgdev.bizwatch.service.DataProcessingService;
 import org.alexgdev.bizwatch.service.IBizStatsService;
 import org.alexgdev.bizwatch.service.ICoinService;
 import org.alexgdev.bizwatch.service.JDBCBizStatsService;
 import org.alexgdev.bizwatch.service.JDBCCoinService;
-import org.alexgdev.bizwatch.service.OpenNLPService;
 import org.alexgdev.bizwatch.service.ScraperService;
+
 import org.joda.time.LocalDateTime;
 import org.jsoup.Jsoup;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,7 +40,7 @@ import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
-import io.vertx.ext.web.RoutingContext;
+
 
 @Component
 public class DataCollectionVerticle extends AbstractVerticle{
@@ -52,24 +49,26 @@ public class DataCollectionVerticle extends AbstractVerticle{
 	private static final int RETRIES = 3;
 	private static final int THREADRETRIES = 3;
 	private ScraperService scraper;
-	List<String> commonWords = Arrays.asList(" time ", " moon ", " pay ", " game ", " part ");
+	
 	
 	@Autowired
-	private OpenNLPService nlpService;
+	private DataProcessingService processingService;
 	
 	private ICoinService coinService;
 	private IBizStatsService statsService;
 	
 	private Queue<PageEntryDTO> threadsToProcess;
 	private Long threadProcessTimer;
-	private Integer processedCount = 0;
-	private Queue<CryptoCoin> coinsToProcess;
-	
-	private Instant processingStart;
+
 	private Long scheduleTimer;
 	private int lastHourProcessed = 0;
-	//how often 
-	private int getDataRetries = 3;
+	//how often retry
+	private int bizstatsRetries;
+	private int microCapRetries;
+	
+	private boolean processingThreads;
+	
+	List<CoinMarketCapDTO> interestingMicroCaps;
     
 	@Override
     public void start() throws Exception {
@@ -85,15 +84,23 @@ public class DataCollectionVerticle extends AbstractVerticle{
 	    }
 	    
 	    threadsToProcess = new ArrayDeque<PageEntryDTO>();
-	    coinsToProcess = new ArrayDeque<CryptoCoin>();
+	    processingThreads = false;
+	    bizstatsRetries = RETRIES;
+	    microCapRetries = RETRIES;
+	    interestingMicroCaps = new ArrayList<CoinMarketCapDTO>();
+	    
+	    vertx.eventBus()
+	    	.<String>consumer(MessageEndpoints.GETMICROCAPS)
+	    	.handler(getMicrocaps());
 	    
 	    //collect data hourly
 	    scheduleTimer = vertx.setPeriodic(10000, i -> {
 	    	LocalDateTime t = LocalDateTime.now();
-	    	if(t.getHourOfDay() != lastHourProcessed){ //
+	    	if(t.getHourOfDay() != lastHourProcessed && !processingThreads){ //
 	    		
 	    		lastHourProcessed = LocalDateTime.now().getHourOfDay();
 	    		LOGGER.info("Processing Hour: "+lastHourProcessed);
+	    		collectMicrocaps();
 	    		collectBizData();
 	    	}
 	    });
@@ -128,42 +135,82 @@ public class DataCollectionVerticle extends AbstractVerticle{
         };
     }
     
+    private void collectMicrocaps(){
+    	scraper.getCoinData(-1).setHandler(resultHandlerPassThrough( coins -> {
+	 	      if (coins == null && microCapRetries > 0) {
+	  	    	 LOGGER.error("Could not retrieve microcap data, retrying");
+	  	    	 microCapRetries--;
+	  	    	 long timer =   vertx.setTimer(2000, id -> {
+		  	    	collectMicrocaps();
+		  	     });
+	  	      } else if (coins == null) {
+	  	    	  microCapRetries = RETRIES;
+	  	    	  LOGGER.error("Could not retrieve microcaps!");	    
+			  } else {
+				  microCapRetries = RETRIES;
+
+				  interestingMicroCaps = coins.stream().filter(dto -> dto.getMarket_cap_usd() != null && dto.getMarket_cap_usd()<=250000)
+													  .filter(dto -> dto.getTotal_supply() != null && dto.getTotal_supply()<= 50000000)
+													  .filter(dto -> dto.getVolume() != null 
+													  		&& dto.getMarket_cap_usd() > 0 
+													  		&& (dto.getVolume()/dto.getMarket_cap_usd()) >= 0.02)
+													  .filter(dto -> dto.getAvailable_supply() != null 
+													  		&& dto.getTotal_supply() > 0 
+													  		&& (dto.getAvailable_supply()/dto.getTotal_supply()) >= 0.85)
+													  .collect(Collectors.toList());
+				  LOGGER.info("Finished getting microcaps");
+	  	    	 
+
+	  	      }
+	        }));
+    }
+    
+    private Handler<Message<String>> getMicrocaps(){
+		return msg -> {
+			
+			msg.reply(Json.encodePrettily(interestingMicroCaps));
+		};
+	}
+    
+    
     private void collectBizData(){
 		LOGGER.info("Starting to get Data");
 		
 		scraper.getBizThreads().setHandler(resultHandlerPassThrough( pageEntries -> {
-			if (pageEntries == null && getDataRetries > 0) {
+			if (pageEntries == null && bizstatsRetries > 0) {
 	  	    	 LOGGER.error("Could not retrieve catalog, retrying");
-	  	    	getDataRetries--;
-		  	    long timer =   vertx.setTimer(2000, id -> {
+	  	    	 bizstatsRetries--;
+	  	    	 long timer =   vertx.setTimer(2000, id -> {
 		  	    	collectBizData();
 		  	     });
 	  	      } else if (pageEntries == null) {
-		  	    	LOGGER.error("Could not retrieve catalog, stopping");
-		  	    	getDataRetries = RETRIES; 	    
+	  	    	  bizstatsRetries = RETRIES;
+	  	    	  LOGGER.error("Could not retrieve catalog, stopping");
+		  	    	 	    
 			  } else {
 	  	    	  //LOGGER.info("Retrieved Page Entries: "+pageEntries.size());
-				 getDataRetries = RETRIES;
-	  	    	 List<PostDTO> posts = new ArrayList<PostDTO>();
+				 bizstatsRetries = RETRIES;
+				 processingThreads = true;
+				 List<String> threads = new ArrayList<String>();
+	  	    	 List<String> posts = new ArrayList<String>();
 	  	    	 for(PageEntryDTO e : pageEntries){
 	  	    		 e.setRetries(THREADRETRIES);
 	  	    		 threadsToProcess.add(e);
-	  	    		 
+	  	    		 threads.add((e.getSub()+" "+e.getCom()).toLowerCase());
 	  	    	 }
 
-	  	    	 threadProcessTimer =   vertx.setTimer(1000, id -> {
-	  	    		 processThread(posts, pageEntries);
+	  	    	 threadProcessTimer =   vertx.setTimer(2000, id -> {
+	  	    		 processThread(threads, posts);
 	  	    	 });
 	  	      }
 	        }));
     }
     
-    private void processThread(List<PostDTO> posts, List<PageEntryDTO> pageEntries){
+    private void processThread(List<String> threads,List<String> posts){
     	if(threadsToProcess.isEmpty()){
-    		processedCount = 0;
-    		processingStart = Instant.now();
-    		LOGGER.info("Processing finished: "+ posts.size());
-    		processData_Step1(pageEntries, posts);
+    		processingThreads = false;
+    		LOGGER.info("Data collection finished, starting processing: "+ posts.size());
+    		processData_Step1(threads, posts);
     		
     	} else {
     		PageEntryDTO t = threadsToProcess.poll();
@@ -174,18 +221,16 @@ public class DataCollectionVerticle extends AbstractVerticle{
 		  	    	 t.setRetries(t.getRetries()-1);
 		  	    	 threadsToProcess.add(t);
 		  	      } else if (thread == null) {
-		  	    	processedCount++;
 			  	    	 LOGGER.error("Could not retrieve thread");
 			  	  } else {
-			  		processedCount++;
 		  	    	//LOGGER.info("Retrieved Posts: "+processedCount);
 		  	    	 for(PostDTO post : thread.getPosts()){
-		  	    		  posts.add(post);	  	    		  
+		  	    		  posts.add(Jsoup.parse(post.getCom()).text().toLowerCase());	  	    		  
 		  	    	 }
 		  	    	
 		  	      }
-	    		  threadProcessTimer =   vertx.setTimer(1000, id -> {
-		  	    		 processThread(posts, pageEntries);
+	    		  threadProcessTimer =   vertx.setTimer(2000, id -> {
+		  	    		 processThread(threads, posts);
 		  	      });
 		        }));
     	}
@@ -194,28 +239,28 @@ public class DataCollectionVerticle extends AbstractVerticle{
 		
 	
     //get coinmarketcap data and insert new coins into db, then process coin + threads + posts
-    private void processData_Step1(List<PageEntryDTO> threads, List<PostDTO> posts){
-    	
+    private void processData_Step1(List<String> threads, List<String> posts){
+    	Instant processingStart = Instant.now();
     	scraper.getCoinData(200).setHandler(resultHandlerPassThrough( coins -> {
-	 	      if (coins == null && getDataRetries > 0) {
+	 	      if (coins == null && bizstatsRetries > 0) {
 	  	    	 LOGGER.error("Could not retrieve coin data, retrying");
-	  	    	 getDataRetries--;
+	  	    	bizstatsRetries--;
 		  	    long timer =   vertx.setTimer(2000, id -> {
 		  	    	processData_Step1(threads, posts);
 		  	     });
 	  	      } else if (coins == null) {
-		  	    	LOGGER.error("Could not retrieve coin data!");
-		  	    	 getDataRetries = RETRIES; 	    
+		  	    	LOGGER.error("Could not retrieve coin data!");	
+		  	    	bizstatsRetries = RETRIES;
 			  } else {
-				  getDataRetries = RETRIES;
+				  bizstatsRetries = RETRIES;
 	  	    	  for(CoinMarketCapDTO coinDTO : coins){
 	  	    		  coinService.getCertain(coinDTO.getId()).setHandler(resultHandler( optionalCoin -> {
 		  	  	 	      if (!optionalCoin.isPresent()) {
 		  	  	 	    	CryptoCoin coin = new CryptoCoin(coinDTO);
 		  	  	 	    	coinService.insert(coin).setHandler(resultHandler( success -> {
 		  	  	  	 	      if (success) {
-		  	  		  	    	 LOGGER.info("Created coin: "+coin.getId());
-		  	  		  	    	 processData_Step2(threads, posts, coin, coinDTO);
+		  	  		  	    	 //LOGGER.info("Created coin: "+coin.getId());
+		  	  		  	    	 processData_Step2(processingStart, threads, posts, coin, coinDTO);
 		  	  		  	    	 
 		  	  		  	      } else {
 		  	  		  	    	  LOGGER.info("Could not create coin");
@@ -224,7 +269,7 @@ public class DataCollectionVerticle extends AbstractVerticle{
 		  	  		        }));
 		  		  	    	 
 		  		  	      } else {
-		  		  	    	processData_Step2(threads, posts, optionalCoin.get(), coinDTO);
+		  		  	    	processData_Step2(processingStart, threads, posts, optionalCoin.get(), coinDTO);
 		  		  	    	 
 		  		  	      }
 	  	    		  }));
@@ -233,27 +278,10 @@ public class DataCollectionVerticle extends AbstractVerticle{
 	  	      }
 	        }));
     }
-	private void processData_Step2(List<PageEntryDTO> threads, List<PostDTO> posts, CryptoCoin coin, CoinMarketCapDTO coindto){
-		int threadCount = this.getThreadOccurences(threads, coin);
-		PostStatsDTO postStats;postStats = this.getPostStats(posts, coin);
-		BizStatsEntry statEntry;
-		statEntry = new BizStatsEntry(coindto);
-		statEntry.setDate(processingStart);
-		statEntry.setCoin(coin);
-		if(threadCount > 0 || postStats.getCountMentions() > 0){
-			
-			statEntry.setNrThreads(threadCount);
-			statEntry.setNrPosts(postStats.getCountMentions());
-			statEntry.setAverageSentiment(postStats.getAverageScore());
-			statEntry.setNegativeMentions(postStats.getClassifiedNegative());
-			statEntry.setPositiveMentions(postStats.getClassifiedPositive());
-			if(postStats.getTop5words().length()>254){
-				statEntry.setTop5words(postStats.getTop5words().substring(0, 254));
-			} else {
-				statEntry.setTop5words(postStats.getTop5words());
-			}
-
-		}
+	private void processData_Step2(Instant processingStart, List<String> threads, List<String> posts, CryptoCoin coin, CoinMarketCapDTO coindto){
+		
+		BizStatsEntry statEntry = processingService.processData(processingStart, threads, posts, coin, coindto);
+		
 		statsService.insert(statEntry).setHandler(resultHandler( success -> {
 	  	 	      if (success) {
 		  	    	 LOGGER.info("Created statEntry: "+statEntry.getCoin());
@@ -266,130 +294,6 @@ public class DataCollectionVerticle extends AbstractVerticle{
 		}));
 	}
     
-    private int getThreadOccurences(List<PageEntryDTO> threads, CryptoCoin coin){
-		int threadCount = 0;
-		String title = "";
-		String content = "";
-		String term1 = " "+coin.getName().toLowerCase()+" ";
-		String term2 = " "+coin.getSymbol().toLowerCase()+" ";
-		for(PageEntryDTO thread : threads){
-			
-			title = thread.getSub().toLowerCase();
-			content = thread.getCom().toLowerCase();
-			term1 = " "+coin.getName().toLowerCase()+" ";
-			term2 = " "+coin.getSymbol().toLowerCase()+" ";
-			if(title.contains(term1)){
-				threadCount++;
-			} else if(title.contains(term2) && !commonWords.contains(term2)){
-				threadCount++;
-			} else if(content.contains(term1)){
-				threadCount++;
-			} else if(content.contains(term2) && !commonWords.contains(term2)){
-				threadCount++;
-			}
-			
-		}
-		
-		return threadCount;
-		
-	}
-	
-	private int getPostOccurences(List<PostDTO> posts, CryptoCoin coin){
-		int postCount = 0;
-		String content = "";
-		String term1 = " "+coin.getName().toLowerCase()+" ";
-		String term2 = " "+coin.getSymbol().toLowerCase()+" ";
-		for(PostDTO post : posts){
-			
-			
-			content = post.getCom().toLowerCase();
-			if((content.contains(term1) || content.contains(term2)) && !commonWords.contains(term2)){
-				postCount++;
-			} 
-			
-		}
-		
-		return postCount;
-		
-	}
-	
-	private PostStatsDTO getPostStats(List<PostDTO> posts, CryptoCoin coin){
-		int postCount = 0;
-		int positive = 0;
-		int negative = 0;
-		double average = 0;
-		String content = "";
-		String term1 = " "+coin.getName().toLowerCase()+" ";
-		String term2 = " "+coin.getSymbol().toLowerCase()+" ";
-		double postAvg;
-		double[] classificationResult;
-		
-		HashMap<String, Integer> wordCount = new HashMap<String, Integer>();
-		String[] sentences;
-		String[] tokens;
-		List<String> wordStems;
-		for(PostDTO post : posts){
-						
-			content = Jsoup.parse(post.getCom()).text().toLowerCase();
-			
-			if((content.contains(term1) || content.contains(term2)) && !commonWords.contains(term2)){
-				postCount++;
-				
-				sentences = nlpService.getSentences(content);
-				postAvg = 0;
-				wordStems = new ArrayList<String>();
-				for(String sentence : sentences){
-					tokens = nlpService.tokenize(sentence);
-					//Sentiment Analysis
-					classificationResult = nlpService.classifySentiment(tokens);
-					if(classificationResult[0]>classificationResult[1]){
-						positive += 1;
-					} else {
-						negative += 1;
-					}
-					postAvg = postAvg+(classificationResult[0]-classificationResult[1]);
-					
-					//get Word stems and add to list
-					//wordStems = Stream.concat(wordStems.stream(), nlpService.stem(nlpService.removeStopWords(new ArrayList<String>(Arrays.asList(tokens)))).stream()).collect(Collectors.toList());
-					wordStems = Stream.concat(wordStems.stream(), nlpService.removeStopWords(new ArrayList<String>(Arrays.asList(tokens))).stream()).collect(Collectors.toList());
-					
-					
-					
-				}
-				postAvg = postAvg/(double)sentences.length;
-				average+=postAvg;
-				//distinct word stems
-				wordStems = wordStems.stream().distinct().collect(Collectors.toList());
-				for(String wordStem : wordStems){
-					if(!wordStem.equals(term1.trim()) && !wordStem.equals(term2.trim())){
-						if(wordCount.containsKey(wordStem)){
-							wordCount.put(wordStem, wordCount.get(wordStem)+1);
-						} else {
-							wordCount.put(wordStem, 1);
-						}
-					}
-					
-				}
-				
-				
-				
-			} 
-			
-		}
-		List<String> orderedWordStems = wordCount.entrySet().stream()
-                .sorted(Map.Entry.comparingByValue(Comparator.reverseOrder()))
-                .map(Map.Entry::getKey)
-                .collect(Collectors.toList());
-		if(orderedWordStems.size()>5){
-			orderedWordStems = orderedWordStems.subList(0, 5);
-		}
-		String top5 = String.join(", ", orderedWordStems);
-               
-		average = average /(double) postCount;
-		if(commonWords.contains(term2)){
-			postCount = (int) (postCount * 0.1);
-		}
-		return new PostStatsDTO(postCount, positive, negative, average, top5);
-	}
+    
 
 }

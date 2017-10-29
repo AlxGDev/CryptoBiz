@@ -36,7 +36,7 @@ public class ScraperService {
 		WebClientOptions options = new WebClientOptions().setUserAgent(userAgent);
 		headers.add("User-Agent", userAgent);
 	    
-		options.setKeepAlive(false);
+		//options.setKeepAlive(false);
 		restclient = WebClient.create(vertx, options);
 	}
 	

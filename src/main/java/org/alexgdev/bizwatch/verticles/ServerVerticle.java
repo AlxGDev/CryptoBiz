@@ -33,6 +33,7 @@ public class ServerVerticle extends AbstractVerticle {
 	private static final String API_RETRIEVE_CERTAIN_COIN = "/api/coins/:id";
 	private static final String API_RETRIEVE_ALL_STATS = "/api/bizstats";
 	private static final String API_RETRIEVE_TOP10_STATS = "/api/bizstats/top10";
+	private static final String API_MICROCAPS = "/api/microcaps";
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(ServerVerticle.class);
 	
@@ -72,6 +73,7 @@ public class ServerVerticle extends AbstractVerticle {
         router.get(API_RETRIEVE_CERTAIN_COIN).handler(this::handleGetCoin);
         router.get(API_RETRIEVE_ALL_STATS).handler(this::handleGetAllStats);
         router.get(API_RETRIEVE_TOP10_STATS).handler(this::handleGetTop10Stats);
+        router.get(API_MICROCAPS).handler(this::handleGetMicrocaps);
         /*router.get("/api/coins")
             .handler(this::handleCoinGetAll);
         router.get("/api/bizstats")
@@ -196,6 +198,24 @@ public class ServerVerticle extends AbstractVerticle {
     	      }
     	}));
 	}
+    
+    public void handleGetMicrocaps(RoutingContext context){
+    	vertx.eventBus()
+            .<String>send(MessageEndpoints.GETMICROCAPS, "get", resultHandler(context, res -> {
+    	      if (res == null) {
+    	    	  LOGGER.error("result is null");  
+    	        serviceUnavailable(context);
+    	      } else {
+    	    	MessageDTO msg = new MessageDTO();
+      	    	msg.setType(MessageType.SUCCESS);
+      	    	msg.setData(res.body());
+      	        final String encoded = Json.encodePrettily(msg);
+    	        context.response()
+    	          .putHeader("content-type", "application/json")
+    	          .end(res.body());
+    	      }
+    	}));
+    	}
     
     
     
