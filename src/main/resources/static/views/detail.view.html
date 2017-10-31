@@ -1,7 +1,7 @@
 
 
 <div class = "container">
-<div class="page-header" id="banner">
+<div class="page-header centered-text" id="banner">
   <h1>{{vm.currentcoin.name.charAt(0).toUpperCase() + vm.currentcoin.name.slice(1)}} ({{vm.currentcoin.symbol.toUpperCase()}})</h1>
 </div>
 <div class = "jumbotron">
@@ -16,18 +16,20 @@
 	<div class="row">
       <div class="col-md-3">
         <p class="input-group">
+         <span class="input-group-addon" id="basic-addon1">From:</span>
           <input type="text" class="form-control" uib-datepicker-popup="dd.MM.yyyy" ng-model="vm.from" is-open="vm.popup1.opened" ng-required="true" close-text="Close" />
           <span class="input-group-btn">
-            <button type="button" class="btn btn-default" ng-click="vm.open1()"><i class="glyphicon glyphicon-calendar"></i></button>
+            <button type="button" class="btn btn-primary" ng-click="vm.open1()"><i class="glyphicon glyphicon-calendar"></i></button>
           </span>
         </p>
       </div>
 
       <div class="col-md-3">
         <p class="input-group">
+          <span class="input-group-addon" id="basic-addon1">To:</span>
           <input type="text" class="form-control" uib-datepicker-popup="dd.MM.yyyy" ng-model="vm.to" is-open="vm.popup2.opened" ng-required="true" close-text="Close" />
           <span class="input-group-btn">
-            <button type="button" class="btn btn-default" ng-click="vm.open2()"><i class="glyphicon glyphicon-calendar"></i></button>
+            <button type="button" class="btn btn-primary" ng-click="vm.open2()"><i class="glyphicon glyphicon-calendar"></i></button>
           </span>
         </p>
       </div>
@@ -35,7 +37,7 @@
       <div class="col-md-3">
         <p class="input-group">
           <span class="input-group-btn">
-            <button type="button" class="btn btn-default" ng-click="vm.reloadCoinInfo()">Reload</i></button>
+            <button type="button" class="btn btn-primary" ng-click="vm.reloadCoinInfo()">Reload</i></button>
           </span>
         </p>
       </div>
@@ -44,22 +46,45 @@
     
 
 <div class="panel panel-default">
-  <div class="panel-heading">
-    <h3 class="panel-title">{{vm.currentcoin.name}} Stats - {{vm.currentstats.date | date:'dd.MM.yyyy HH:mm'}}</h3>
+  <div class="panel-heading text-center">
+    <h3 class="panel-title">{{vm.currentcoin.name.charAt(0).toUpperCase() + vm.currentcoin.name.slice(1)}} Stats - {{vm.currentstats.date | date:'dd.MM.yyyy HH:mm'}}</h3>
   </div>
   <div class="panel-body">
     Information gathered from 4chan's /biz/ board:
   </div>
-  <ul class="list-group">
-    <li class="list-group-item">Number of threads: {{vm.currentstats.nrThreads}}</li>
-    <li class="list-group-item">Number of posts: {{vm.currentstats.nrPosts}}</li>
-    <li class="list-group-item">Positive mentions: {{vm.currentstats.positiveMentions}}</li>
-    <li class="list-group-item">Negative mentions: {{vm.currentstats.negativeMentions}}</li>
-    <li class="list-group-item">Common words: {{vm.currentstats.top5words}}</li>
-    <li class="list-group-item">Average sentiment: {{vm.currentstats.averageSentiment}}</li>
-    <li class="list-group-item">Price: $ {{vm.currentstats.price_usd}} | BTC {{vm.currentstats.price_btc}}</li>
-    
-  </ul>
+  <table class="table table-striped table-hover table-bordered">
+		  <tbody>
+		    <tr>
+		      <td>Number of Threads</td>
+		      <td class="text-center">{{vm.currentstats.nrThreads}}</td>
+		    </tr>
+		     <tr>
+		      <td>Number of Post</td>
+		      <td class="text-center">{{vm.currentstats.nrPosts}}</td>
+		    </tr>
+		    <tr>
+		      <td>Positive Mentions</td>
+		      <td class="text-center">{{vm.currentstats.positiveMentions}}</td>
+		    </tr>
+		    <tr>
+		      <td>Negative Mentions</td>
+		      <td class="text-center">{{vm.currentstats.negativeMentions}}</td>
+		    </tr>
+		    <tr>
+		      <td>Common Words</td>
+		      <td class="text-center">{{vm.currentstats.top5words}}</td>
+		    </tr>
+		    <tr>
+		      <td>Average Sentiment</td>
+		      <td class="text-center">{{vm.currentstats.averageSentiment}}</td>
+		    </tr>
+		    <tr>
+		      <td>Price</td>
+		      <td class="text-center">$ {{vm.currentstats.price_usd}} | BTC {{vm.currentstats.price_btc}}</td>
+		    </tr>
+  		</tbody>
+		</table> 
+  
 </div>
 
 </div>

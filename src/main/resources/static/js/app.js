@@ -28,6 +28,15 @@
                 templateUrl: '/views/detail.view.html',
                 controllerAs: 'vm',
                 module: 'public'
+       }).state('microcaps', {
+	   		url: '/microcaps',
+            controller: 'MicroCapsController',
+            params: {
+                'coin': {}
+              },
+            templateUrl: '/views/microcaps.view.html',
+            controllerAs: 'vm',
+            module: 'public'
        });
 	   
 	   

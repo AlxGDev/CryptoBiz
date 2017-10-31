@@ -24,6 +24,8 @@ public class CoinMarketCapDTO {
 	private Double percent_change_24h;
 	private Double percent_change_7d;
 	private String last_updated;
+	private Double volume_marketcap_ratio;
+	private String announcementUrl;
 	
 
 }

@@ -10,7 +10,10 @@ import java.util.stream.Collectors;
 
 import org.alexgdev.bizwatch.dto.CoinMarketCapDTO;
 import org.alexgdev.bizwatch.dto.ThreadDTO;
-
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 import org.alexgdev.bizwatch.dto.PageDTO;
 import org.alexgdev.bizwatch.dto.PageEntryDTO;
 import org.alexgdev.bizwatch.dto.PostDTO;
@@ -88,7 +91,7 @@ public class ScraperService {
 	
 	}
 	
-	public Future<List<CoinMarketCapDTO>> getCoinData(int limit){
+	public Future<List<CoinMarketCapDTO>> getCoinMarketCapData(int limit){
 		
 		String endpoint = "https://api.coinmarketcap.com/v1/ticker/";
 		if(limit > 0){
@@ -138,25 +141,33 @@ public class ScraperService {
 		
 	}
 	
-	
-	/*public <List<PostDTO> getBizPosts() throws ServiceException{
-		List<List<PostDTO>> cs = new ArrayList<List<PostDTO>>();
-		List<PageEntryDTO> catalog = this.getBizThreads();
-		for(PageEntryDTO catthread : catalog){
-			ThreadDTO thread = this.getBizThread(catthread.getNo());
-			if(thread != null){
-				cs.add(thread.getPosts());
-			}
-			try {
-				//API limit
-				Thread.sleep(1000);
-			} catch (InterruptedException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-		}
-		return cs.stream().flatMap(Collection::stream).collect(Collectors.toList());
-	} */
+	public Future<String> getAnnouncementPage(String coinId){
+		HttpRequest<Buffer> request = restclient.getAbs("https://coinmarketcap.com/currencies/"+coinId);
+		Future<String> result = Future.future();
+		request.send(ar -> {
+			if (ar.succeeded()) {
+				HttpResponse<Buffer> response = ar.result();
+				if(response.statusCode() == 200){
+					String resultString = "";
+					Element e = Jsoup.parse(response.bodyAsString()).getElementsByAttributeValue("title", "Announcement").first();
+					if( e != null){
+						e = e.parent().getElementsByTag("a").first();
+						if(e != null){
+							resultString = e.attr("href");
+						}
+					};
+					result.complete(resultString); 
+					} else {
+						result.fail("Status Code: "+response.statusCode());
+					}
+				} else {
+					result.fail(ar.cause());
+				}
+		});
+		return result;
+		
+	}
+
 	
 
 }

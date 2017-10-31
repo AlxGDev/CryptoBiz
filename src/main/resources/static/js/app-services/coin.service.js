@@ -18,6 +18,7 @@
         service.getAllCoins = getAllCoins;
         service.getAllCoinStats = getAllCoinStats;
         service.getTop10Stats = getTop10Stats;
+        service.getMicroCaps = getMicroCaps;
         
 
         return service;
@@ -109,6 +110,7 @@
         		$http.get(url).then(function successCallback(response) {
         			urlDateCache[url]=currentDate;
         			urlResultCache[url]={ success: true, message: response.data};
+        			requestsCached++;
 					callback(urlResultCache[url]);
 				}, function errorCallback(response) {
 					  if(response.data.message != null){
@@ -144,6 +146,7 @@
         		$http.get(url).then(function successCallback(response) {
         			urlDateCache[url]=currentDate;
         			urlResultCache[url]={ success: true, message: response.data};
+        			requestsCached++;
 					callback(urlResultCache[url]);
 				}, function errorCallback(response) {
 					  if(response.data.message != null){
@@ -165,6 +168,43 @@
         		callback(urlResultCache[url]);
         	}
 		}
+        
+        function getMicroCaps(callback) {
+        	if(requestsCached === 100){
+				requestsCached = 0;
+				urlDateCache ={};
+			    urlResultCache={};
+			}
+        	var url = "/api/microcaps";
+        	var currentDate = new Date();
+        	if(urlDateCache[url] === undefined || Math.round((currentDate.getTime() - urlDateCache[url].getTime())/60000) >= cacheTimeOut){
+        		
+        		$http.get(url).then(function successCallback(response) {
+        			urlDateCache[url]=currentDate;
+        			urlResultCache[url]={ success: true, message: response.data};
+        			requestsCached++;
+					callback(urlResultCache[url]);
+				}, function errorCallback(response) {
+					  if(response.data.message != null){
+							callback({ success: false, message: response.data.message});
+					  } else if(response.data.error != null){
+	 					  var i, len = response.data.error.length;
+	 					  var message = "";
+	 					  for(i = 0; i<len;i++){
+	 						 message += response.data.error[i]+"\n";
+	 					  }
+							callback({ success: false, message: message});
+					  }
+					  else{
+							callback({ success: false, message:'Error loading microcaps!'});
+					  }
+				});
+        	} else {
+        		
+        		callback(urlResultCache[url]);
+        	}
+		}
+        
 
         
     }

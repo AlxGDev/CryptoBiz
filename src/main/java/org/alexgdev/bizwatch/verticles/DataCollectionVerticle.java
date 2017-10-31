@@ -61,14 +61,15 @@ public class DataCollectionVerticle extends AbstractVerticle{
 	private Long threadProcessTimer;
 
 	private Long scheduleTimer;
-	private int lastHourProcessed = 0;
+	private int lastHourProcessed = -1;
 	//how often retry
 	private int bizstatsRetries;
 	private int microCapRetries;
 	
 	private boolean processingThreads;
 	
-	List<CoinMarketCapDTO> interestingMicroCaps;
+	private List<CoinMarketCapDTO> interestingMicroCaps;
+	private Queue<CoinMarketCapDTO> microcapsToProcess;
     
 	@Override
     public void start() throws Exception {
@@ -88,6 +89,7 @@ public class DataCollectionVerticle extends AbstractVerticle{
 	    bizstatsRetries = RETRIES;
 	    microCapRetries = RETRIES;
 	    interestingMicroCaps = new ArrayList<CoinMarketCapDTO>();
+	    microcapsToProcess = new ArrayDeque<CoinMarketCapDTO>();
 	    
 	    vertx.eventBus()
 	    	.<String>consumer(MessageEndpoints.GETMICROCAPS)
@@ -102,6 +104,7 @@ public class DataCollectionVerticle extends AbstractVerticle{
 	    		LOGGER.info("Processing Hour: "+lastHourProcessed);
 	    		collectMicrocaps();
 	    		collectBizData();
+	    		
 	    	}
 	    });
  
@@ -136,7 +139,7 @@ public class DataCollectionVerticle extends AbstractVerticle{
     }
     
     private void collectMicrocaps(){
-    	scraper.getCoinData(-1).setHandler(resultHandlerPassThrough( coins -> {
+    	scraper.getCoinMarketCapData(-1).setHandler(resultHandlerPassThrough( coins -> {
 	 	      if (coins == null && microCapRetries > 0) {
 	  	    	 LOGGER.error("Could not retrieve microcap data, retrying");
 	  	    	 microCapRetries--;
@@ -148,8 +151,8 @@ public class DataCollectionVerticle extends AbstractVerticle{
 	  	    	  LOGGER.error("Could not retrieve microcaps!");	    
 			  } else {
 				  microCapRetries = RETRIES;
-
-				  interestingMicroCaps = coins.stream().filter(dto -> dto.getMarket_cap_usd() != null && dto.getMarket_cap_usd()<=250000)
+				  List<CoinMarketCapDTO> result = new ArrayList<CoinMarketCapDTO>();
+				  interestingMicroCaps = coins.stream().filter(dto -> dto.getMarket_cap_usd() != null && dto.getMarket_cap_usd()<=2000000)
 													  .filter(dto -> dto.getTotal_supply() != null && dto.getTotal_supply()<= 50000000)
 													  .filter(dto -> dto.getVolume() != null 
 													  		&& dto.getMarket_cap_usd() > 0 
@@ -157,12 +160,37 @@ public class DataCollectionVerticle extends AbstractVerticle{
 													  .filter(dto -> dto.getAvailable_supply() != null 
 													  		&& dto.getTotal_supply() > 0 
 													  		&& (dto.getAvailable_supply()/dto.getTotal_supply()) >= 0.85)
+													  .map(dto -> {dto.setVolume_marketcap_ratio(Math.round((dto.getVolume()/dto.getMarket_cap_usd()) * 100.0) / 100.0);
+													  			   microcapsToProcess.add(dto);
+													  			   return dto;})
 													  .collect(Collectors.toList());
-				  LOGGER.info("Finished getting microcaps");
-	  	    	 
+				  LOGGER.info("Finished getting microcaps, starting processing");
+				  vertx.setTimer(1000, id -> {
+		  	    		 processMicroCap();
+				  });
 
 	  	      }
 	        }));
+    }
+    private void processMicroCap(){
+    	if(microcapsToProcess.isEmpty()){
+    		LOGGER.info("Finished processing microcaps");	
+    	} else {
+    		CoinMarketCapDTO t = microcapsToProcess.poll();
+    		scraper.getAnnouncementPage(t.getId()).setHandler(resultHandlerPassThrough( url -> {
+    			  
+	    		  if (url == null) {
+			  	    	 LOGGER.error("Could not retrieve announcement thread for " +t.getId());
+			  	  } else {
+		  	    	t.setAnnouncementUrl(url);
+		  	    	
+		  	      }
+	    		  vertx.setTimer(1000, id -> {
+	    			  processMicroCap();
+		  	      });
+		        }));
+    	}
+    	
     }
     
     private Handler<Message<String>> getMicrocaps(){
@@ -241,7 +269,7 @@ public class DataCollectionVerticle extends AbstractVerticle{
     //get coinmarketcap data and insert new coins into db, then process coin + threads + posts
     private void processData_Step1(List<String> threads, List<String> posts){
     	Instant processingStart = Instant.now();
-    	scraper.getCoinData(200).setHandler(resultHandlerPassThrough( coins -> {
+    	scraper.getCoinMarketCapData(200).setHandler(resultHandlerPassThrough( coins -> {
 	 	      if (coins == null && bizstatsRetries > 0) {
 	  	    	 LOGGER.error("Could not retrieve coin data, retrying");
 	  	    	bizstatsRetries--;
@@ -284,7 +312,7 @@ public class DataCollectionVerticle extends AbstractVerticle{
 		
 		statsService.insert(statEntry).setHandler(resultHandler( success -> {
 	  	 	      if (success) {
-		  	    	 LOGGER.info("Created statEntry: "+statEntry.getCoin());
+		  	    	 //LOGGER.info("Created statEntry: "+statEntry.getCoin());
 		  	    	 
 		  	    	 
 		  	      } else {

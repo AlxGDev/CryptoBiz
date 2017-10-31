@@ -1,55 +1,35 @@
 
 
 <div class = "container">
-	<div class="page-header" id="banner">
-	  <h1><center>Current /biz/ Top 10</center></h1>
+	<div class="page-header text-center" id="banner">
+		<h1>Top 10 - Crypto Currencies on /biz/</h1>
 	</div>
+	
 	<div class = "jumbotron">
 	
 		<div class="alert alert-danger" ng-hide = "vm.error.hidden">
 		  <strong>Error!</strong> {{vm.error.message}}
 		</div>
-		<ul class="list-group">
-	    <li class="list-group-item" >
-	    	<div class="row">
-		      <div class="col-md-2 col-md-offset-1">
-		        <b><h3>Rank</h3><b>
-		      </div>
-		      <div class="col-md-2">
-		        <b><h3>Name</h3><b>
-		      </div>
-		      <div class="col-md-2">
-		       <b><h3>Symbol</h3><b>
-		      </div>
-		      <div class="col-md-2">
-		        <b><h3>Threads</h3><b>
-		      </div>
-		      <div class="col-md-2">
-		        <b><h3>Posts</h3><b>
-		      </div>
-			 </div>
-		</li>
-		 <li class="list-group-item" ng-repeat="stat in vm.coinstats" >
-	    	<a ui-sref="detail({coin: stat.coin})" class ="deco-none">
-	    	<div class="row">
-		      <div class="col-md-2 col-md-offset-1">
-		        {{$index +1}}
-		      </div>
-		      <div class="col-md-2">
-		        {{stat.coin.name.charAt(0).toUpperCase() + stat.coin.name.slice(1)}}
-		      </div>
-		      <div class="col-md-2">
-		        {{stat.coin.symbol.toUpperCase()}}
-		      </div>
-		      <div class="col-md-2">
-		        {{stat.nrThreads}}
-		      </div>
-		      <div class="col-md-2">
-		        {{stat.nrPosts}}
-		      </div>
-			 </div>
-			 </a>
-		</li>
-	  </ul>
+		<table class="table table-striped table-hover table-bordered">
+		  <thead class="thead-inverse">
+		    <tr >
+		      <th class="text-warning text-center">Rank</th>
+		      <th class="text-warning text-center">Name</th>
+		      <th class="text-warning text-center">Symbol</th>
+		      <th class="text-warning text-center">Threads</th>
+		      <th class="text-warning text-center">Posts</th>
+		    </tr>
+		  </thead>
+		  <tbody>
+		    <tr ng-repeat="stat in vm.coinstats" ui-sref="detail({coin: stat.coin})">
+		      <td class = "text-center">{{$index +1}}</td>
+		      <td class = "text-center">{{stat.coin.name.charAt(0).toUpperCase() + stat.coin.name.slice(1)}}</td>
+		      <td class = "text-center">{{stat.coin.symbol.toUpperCase()}}</td>
+		      <td class = "text-center">{{stat.nrThreads}}</td>
+		      <td class = "text-center">{{stat.nrPosts}}</td>
+		    </tr>
+  		</tbody>
+		</table> 
+		
 	</div>
 </div>
