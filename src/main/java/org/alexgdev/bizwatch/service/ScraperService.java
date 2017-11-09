@@ -94,7 +94,7 @@ public class ScraperService {
 	public Future<List<CoinMarketCapDTO>> getCoinMarketCapData(int limit){
 		
 		String endpoint = "https://api.coinmarketcap.com/v1/ticker/";
-		if(limit > 0){
+		if(limit >= 0){
 			endpoint+="?limit="+limit;
 		}
 		HttpRequest<Buffer> request =restclient.getAbs(endpoint);

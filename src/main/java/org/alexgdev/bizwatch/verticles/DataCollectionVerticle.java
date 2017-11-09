@@ -139,7 +139,7 @@ public class DataCollectionVerticle extends AbstractVerticle{
     }
     
     private void collectMicrocaps(){
-    	scraper.getCoinMarketCapData(-1).setHandler(resultHandlerPassThrough( coins -> {
+    	scraper.getCoinMarketCapData(0).setHandler(resultHandlerPassThrough( coins -> {
 	 	      if (coins == null && microCapRetries > 0) {
 	  	    	 LOGGER.error("Could not retrieve microcap data, retrying");
 	  	    	 microCapRetries--;
@@ -151,19 +151,21 @@ public class DataCollectionVerticle extends AbstractVerticle{
 	  	    	  LOGGER.error("Could not retrieve microcaps!");	    
 			  } else {
 				  microCapRetries = RETRIES;
-				  List<CoinMarketCapDTO> result = new ArrayList<CoinMarketCapDTO>();
 				  interestingMicroCaps = coins.stream().filter(dto -> dto.getMarket_cap_usd() != null && dto.getMarket_cap_usd()<=2000000)
-													  .filter(dto -> dto.getTotal_supply() != null && dto.getTotal_supply()<= 50000000)
-													  .filter(dto -> dto.getVolume() != null 
+										 .filter(dto -> dto.getTotal_supply() != null && dto.getTotal_supply()<= 50000000) 
+										 .filter(dto -> dto.getVolume() != null 
 													  		&& dto.getMarket_cap_usd() > 0 
-													  		&& (dto.getVolume()/dto.getMarket_cap_usd()) >= 0.02)
-													  .filter(dto -> dto.getAvailable_supply() != null 
+													  		&& (dto.getVolume()/dto.getMarket_cap_usd()) >= 0.02) 
+										 .filter(dto -> dto.getAvailable_supply() != null 
 													  		&& dto.getTotal_supply() > 0 
-													  		&& (dto.getAvailable_supply()/dto.getTotal_supply()) >= 0.85)
-													  .map(dto -> {dto.setVolume_marketcap_ratio(Math.round((dto.getVolume()/dto.getMarket_cap_usd()) * 100.0) / 100.0);
+													  		&& (dto.getAvailable_supply()/dto.getTotal_supply()) >= 0.85) 
+										 .map(dto -> {dto.setVolume_marketcap_ratio(Math.round((dto.getVolume()/dto.getMarket_cap_usd()) * 100.0) / 100.0);
 													  			   microcapsToProcess.add(dto);
 													  			   return dto;})
-													  .collect(Collectors.toList());
+										 .collect(Collectors.toList());
+				  
+				  
+				  LOGGER.info(interestingMicroCaps.size());
 				  LOGGER.info("Finished getting microcaps, starting processing");
 				  vertx.setTimer(1000, id -> {
 		  	    		 processMicroCap();
